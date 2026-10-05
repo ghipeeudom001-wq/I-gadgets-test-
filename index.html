@@ -2021,10 +2021,10 @@ document.addEventListener("DOMContentLoaded", function(){
 <script>
 (function(){
 "use strict";
-const CONFIG = {
+const CONFIG = window.CONFIG = {
   whatsapp: "2348033901371",  // main manager (always available)
   phoneDisplay: "+234 803 390 1371",
-  apiEndpoint: "https://script.google.com/macros/s/AKfycbw6fkNMfQSaXH-aOh19BqCISg44PlTAw3KfMdbPcAMEFMaMLxnk4QdJsmNqefcr1w-tPg/exec",   // paste your Apps Script Web app URL here
+  apiEndpoint: "",   // paste your Apps Script Web app URL here
   paystackPublicKey: "", // paste your Paystack PUBLIC key (pk_...) here to enable online payment
   // Extra staff WhatsApp lines (admin can edit on-site under Admin → Staff). Manager stays first.
   staffContacts: [
@@ -3264,15 +3264,30 @@ function toast(msg){
 function loadConn(){
   try{
     const v = JSON.parse(localStorage.getItem(CFG_KEY) || "{}");
-    endpoint = v.endpoint || ""; adminKey = v.key || "";
+    endpoint = (window.CONFIG && window.CONFIG.apiEndpoint) || v.endpoint || ""; adminKey = v.key || "";
     $("cfgEndpoint").value = endpoint;
     $("cfgKey").value = adminKey;
   }catch(e){}
 }
 function saveConn(){
-  endpoint = $("cfgEndpoint").value.trim();
-  adminKey = $("cfgKey").value.trim();
+  var ep = $("cfgEndpoint").value.replace(/\s+/g, "") || ((window.CONFIG && window.CONFIG.apiEndpoint) || "");
+  var key = $("cfgKey").value.trim();
+  $("cfgEndpoint").value = ep;
+  var hint = null;
+  if(!ep) hint = "Paste your Web app URL first";
+  else if(!/^https:\/\//i.test(ep)) hint = "The URL must start with https://";
+  else if(!/^https:\/\/script\.google\.com\/macros\/s\//i.test(ep)) hint = "That is not a Web app URL. It should look like https://script.google.com/macros/s/AKfy.../exec";
+  else if(/\/dev(\?|$)/.test(ep)) hint = "That is the test link (/dev). Use the Web app URL that ends in /exec";
+  else if(!/\/exec$/.test(ep)) hint = "The URL must end in /exec";
+  else if(!key) hint = "Enter your admin password";
+  if(hint){
+    $("connDot").classList.remove("ok");
+    $("connText").textContent = hint;
+    return;
+  }
+  endpoint = ep; adminKey = key;
   localStorage.setItem(CFG_KEY, JSON.stringify({ endpoint, key: adminKey }));
+  $("connText").textContent = "Connecting…";
   connectAndLoad();
 }
 $("saveConn").addEventListener("click", saveConn);
@@ -3281,7 +3296,7 @@ async function apiGet(action){
   const url = endpoint + "?action=" + encodeURIComponent(action) + "&key=" + encodeURIComponent(adminKey);
   const res = await fetch(url, { redirect: "follow" });
   const text = await res.text();
-  try { return JSON.parse(text); } catch(e){ return { ok:false, error: "Bad response from server (check deployment: Anyone access)" }; }
+  try { return JSON.parse(text); } catch(e){ return { ok:false, error: "Google sent a web page instead of data. Set Who has access to Anyone, run setup once, then Deploy > Manage deployments > Edit > New version > Deploy" }; }
 }
 async function apiPost(body){
   const res = await fetch(endpoint, {
@@ -3314,7 +3329,7 @@ async function connectAndLoad(){
     loadProducts(); loadGallery(); loadEnquiries(); loadOrders(); try{loadChatLogs();}catch(e){}
   }catch(err){
     $("connDot").classList.remove("ok");
-    $("connText").textContent = "Could not reach the backend";
+    $("connText").textContent = "Could not reach the backend. Check the URL ends in /exec and Who has access is Anyone, then redeploy as a New version";
   }
 }
 
